@@ -5,13 +5,14 @@
   var TYPES=['위탁','개인연금','퇴직연금','IRP'];
   var BROKERS=['한국투자증권','삼성증권','미래에셋증권','신한증권','유안타증권'];
   var OWNERS=['개인','법인'];
-  var sel={o:null,b:null,t:null};
-  var LAB={o:'구분',b:'증권사',t:'계좌성격'};
+  var sel={o:null,b:null,t:null,m:null};
+  var LAB={o:'구분',b:'증권사',t:'계좌성격',m:'자산'};
+  var MKTS=['국내','해외','현금'];
   function won(n){return Math.round(n).toLocaleString('ko-KR')}
   function sgn(n){return (n>0?'+':n<0?'−':'')+won(Math.abs(n))}
   function pct(n){return (n>0?'+':n<0?'−':'')+Math.abs(n).toFixed(2)+'%'}
   function cls(n){return n>0?'up':n<0?'down':''}
-  function pass(h,skip){return (skip==='o'||!sel.o||h.o===sel.o)&&(skip==='b'||!sel.b||h.b===sel.b)&&(skip==='t'||!sel.t||h.t===sel.t)}
+  function pass(h,skip){return (skip==='o'||!sel.o||h.o===sel.o)&&(skip==='b'||!sel.b||h.b===sel.b)&&(skip==='t'||!sel.t||h.t===sel.t)&&(skip==='m'||!sel.m||h.m===sel.m)}
   function sum(rows){
     var r={ev:0,inv:0,invEv:0,fee:0,cash:0,n:0};
     rows.forEach(function(h){if(h.halt)return;r.ev+=h.ev;if(h.cash){r.cash+=h.ev}else{r.inv+=h.buy;r.invEv+=h.ev;r.fee+=h.fee;r.n++}});
@@ -59,6 +60,21 @@
     document.getElementById('gain').innerHTML=box(g,'수익 큰 종목 5');
     document.getElementById('loss').innerHTML=box(l,'손실 큰 종목 5');
   }
+  var sortK='ev',sortD=-1,query='';
+  function stocks(rows){
+    var map={},order=[];
+    rows.forEach(function(h){if(h.cash)return;var k=h.n;if(!map[k]){map[k]={n:h.n,m:h.m,q:0,buy:0,ev:0,fee:0,at:{},acc:[]};order.push(k)}
+      var s=map[k];s.q+=h.q;s.buy+=h.buy;s.ev+=h.ev;s.fee+=h.fee;s.at[h.a]=1;s.acc.push(h.b.replace('증권','')+' '+h.t+(h.o==='법인'?'(법인)':'')+' '+won(h.q)+'주')});
+    var list=order.map(function(k){var s=map[k];s.pl=s.ev-s.buy-s.fee;s.r=s.buy?s.pl/s.buy*100:0;return s});list.forEach(function(s){s.w=s.ev});
+    var tot=list.reduce(function(x,s){return x+s.ev},0);
+    if(query){var qq=query.toLowerCase();list=list.filter(function(s){return s.n.toLowerCase().indexOf(qq)>=0})}
+    list.sort(function(x,y){var a=x[sortK],b=y[sortK];if(typeof a==='string')return sortD*a.localeCompare(b,'ko');return sortD*(a-b)});
+    function th(k,t,num){return '<th class="s'+(num?' num':'')+'" data-sort="'+k+'"'+(sortK===k?' aria-sort="'+(sortD<0?'descending':'ascending')+'"':'')+'>'+t+'</th>'}
+    var h='<table><tr>'+th('n','종목')+th('ev','평가금액',1)+th('w','비중',1)+th('pl','순손익',1)+th('r','수익률',1)+th('buy','매입금액',1)+th('q','수량',1)+'</tr>';
+    list.forEach(function(s){h+='<tr><td>'+esc(s.n)+'<div class="hold">'+esc(s.acc.join(' · '))+'</div></td><td class="num">'+won(s.ev)+'</td><td class="num">'+(tot?(s.ev/tot*100).toFixed(1)+'%':'-')+'</td><td class="num '+cls(s.pl)+'">'+sgn(s.pl)+'</td><td class="num '+cls(s.r)+'">'+pct(s.r)+'</td><td class="num">'+won(s.buy)+'</td><td class="num">'+won(s.q)+'</td></tr>'});
+    h+='</table>';
+    document.getElementById('stocks').innerHTML=list.length?h:'<div class="legend">해당 종목이 없습니다.</div>';
+  }
   function render(){
     var rows=H.filter(function(h){return pass(h)});
     var T=sum(rows),cnt={};rows.forEach(function(h){cnt[h.a]=1});
@@ -70,10 +86,10 @@
       '<div class="tile"><div class="l">현금성 자산</div><div class="v">'+won(T.cash)+'</div><div class="sm">예수금·외화·RP</div></div>';
     var fb='<span class="lab">보는 조건</span>';
     var any=false;
-    ['o','b','t'].forEach(function(k){if(sel[k]){any=true;fb+='<button type="button" class="fchip" data-clear="'+k+'">'+LAB[k]+' '+sel[k]+' ✕</button>'}});
+    ['o','b','t','m'].forEach(function(k){if(sel[k]){any=true;fb+='<button type="button" class="fchip" data-clear="'+k+'">'+LAB[k]+' '+sel[k]+' ✕</button>'}});
     fb+=any?'<button type="button" class="chip" data-clear="all">전체 보기</button>':'<span class="lab">전체 (아래 줄을 눌러 좁혀 보세요)</span>';
     document.getElementById('fbar').innerHTML=fb;
-    dim('d-o','o',OWNERS);dim('d-b','b',BROKERS);dim('d-t','t',TYPES);
+    dim('d-o','o',OWNERS);dim('d-b','b',BROKERS);dim('d-t','t',TYPES);dim('d-m','m',MKTS);
     matrix();movers(rows);
     var groups={},order=[];
     rows.forEach(function(h){if(!groups[h.a]){groups[h.a]=[];order.push(h.a)}groups[h.a].push(h)});
@@ -94,14 +110,27 @@
       });
       out+='</table></div></details>';
     });
+    stocks(rows);
     document.getElementById('accts').innerHTML=out||'<div class="card">선택한 조건에 맞는 계좌가 없습니다. "전체 보기"를 눌러 주세요.</div>';
   }
   document.querySelector('main').addEventListener('click',function(e){
     var t=e.target.closest('[data-k],[data-clear]');if(!t)return;
     if(t.hasAttribute('data-k')){var k=t.getAttribute('data-k'),v=t.getAttribute('data-v');sel[k]=sel[k]===v?null:v}
-    else{var c=t.getAttribute('data-clear');if(c==='all'){sel={o:null,b:null,t:null}}else{sel[c]=null}}
+    else{var c=t.getAttribute('data-clear');if(c==='all'){sel={o:null,b:null,t:null,m:null}}else{sel[c]=null}}
     render();
   });
+  document.getElementById('stocks').addEventListener('click',function(e){
+    var t=e.target.closest('[data-sort]');if(!t)return;var k=t.getAttribute('data-sort');
+    if(sortK===k)sortD=-sortD;else{sortK=k;sortD=k==='n'?1:-1}render();
+  });
+  document.getElementById('q').addEventListener('input',function(){query=this.value.trim();render()});
+  function showTab(n){
+    ['dash','acct','stock'].forEach(function(x){var on=x===n;document.getElementById('tb-'+x).setAttribute('aria-selected',on);document.getElementById('pn-'+x).hidden=!on});
+    try{localStorage.setItem('pf_tab',n)}catch(e){}
+    try{window.scrollTo(0,0)}catch(e){}
+  }
+  document.querySelector('.tabs').addEventListener('click',function(e){var t=e.target.closest('[data-tab]');if(t)showTab(t.getAttribute('data-tab'))});
+  try{var st=localStorage.getItem('pf_tab');if(st==='acct'||st==='stock')showTab(st)}catch(e){}
   document.getElementById('toggleAll').onclick=function(){
     var on=this.getAttribute('data-open')!=='1';
     this.setAttribute('data-open',on?'1':'0');this.textContent=on?'모두 접기':'모두 펼치기';

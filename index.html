@@ -114,6 +114,18 @@ h1{margin-bottom:2px}
 .gate .card{width:100%;max-width:360px}
 .gate input{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:9em}
 [hidden]{display:none!important}
+.tp{display:flex;flex-direction:column;gap:16px}
+.tabs{display:flex;gap:6px;position:sticky;top:0;background:var(--bg);padding-block:8px;z-index:5;margin-inline:-4px;padding-inline:4px}
+.tab{flex:1 1 0;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 8px;border-radius:8px;font:inherit;cursor:pointer;font-weight:600}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.search{font:inherit;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);min-width:0;width:12em}
+th.s{cursor:pointer;user-select:none}
+th.s[aria-sort]::after{content:" ▾";color:var(--accent)}
+th.s[aria-sort="ascending"]::after{content:" ▴"}
+.hold{color:var(--muted);font-size:.74rem;line-height:1.4;white-space:normal;max-width:34em}
+#stocks td:first-child,#stocks th:first-child{min-width:12em;position:sticky;left:0;background:var(--surface)}
+.hold{max-width:16em}
 </style>
 </head>
 <body>
@@ -130,27 +142,49 @@ h1{margin-bottom:2px}
     </div>
   </div>
   <section id="gate" class="gate"><form id="gform" class="card"><h2>포트폴리오 수익률 관리</h2><p class="sub">PIN을 입력하면 보유 현황을 불러옵니다.</p><div class="chips"><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN"><button class="btn" type="submit">열기</button></div><p id="gmsg" class="legend" role="status" style="margin:8px 0 0"></p></form></section>
-  <main hidden class="panel" style="display:flex;flex-direction:column;gap:18px;margin-top:14px">
-    <div class="tiles" id="tiles"></div>
+  <main hidden class="panel" style="display:flex;flex-direction:column;gap:16px;margin-top:6px">
+    <nav class="tabs" role="tablist" aria-label="화면 선택">
+      <button class="tab" role="tab" id="tb-dash" data-tab="dash" aria-selected="true" aria-controls="pn-dash">대시보드</button>
+      <button class="tab" role="tab" id="tb-acct" data-tab="acct" aria-selected="false" aria-controls="pn-acct">계좌별</button>
+      <button class="tab" role="tab" id="tb-stock" data-tab="stock" aria-selected="false" aria-controls="pn-stock">종목별</button>
+    </nav>
     <div class="fbar" id="fbar"></div>
-    <div class="grid3">
-      <div class="card dim" id="d-o"></div>
-      <div class="card dim" id="d-b"></div>
-      <div class="card dim" id="d-t"></div>
-    </div>
-    <div class="card">
-      <h3>증권사 × 계좌성격 평가금액</h3>
-      <div class="scroll" id="matrix"></div>
-    </div>
-    <div class="grid2">
-      <div class="card" id="gain"></div>
-      <div class="card" id="loss"></div>
-    </div>
-    <div class="rowhead">
-      <h2 style="margin:0">계좌별 보유 종목</h2>
-      <button class="chip" id="toggleAll" type="button">모두 펼치기</button>
-    </div>
-    <div id="accts" style="display:flex;flex-direction:column;gap:12px"></div>
+
+    <section id="pn-dash" class="tp" role="tabpanel" aria-labelledby="tb-dash">
+      <div class="tiles" id="tiles"></div>
+      <div class="grid4">
+        <div class="card dim" id="d-o"></div>
+        <div class="card dim" id="d-b"></div>
+        <div class="card dim" id="d-t"></div>
+        <div class="card dim" id="d-m"></div>
+      </div>
+      <div class="card">
+        <h3>증권사 × 계좌성격 평가금액</h3>
+        <div class="scroll" id="matrix"></div>
+      </div>
+      <div class="grid2">
+        <div class="card" id="gain"></div>
+        <div class="card" id="loss"></div>
+      </div>
+    </section>
+
+    <section id="pn-acct" class="tp" role="tabpanel" aria-labelledby="tb-acct" hidden>
+      <div class="rowhead">
+        <h2 style="margin:0">계좌별 보유 종목</h2>
+        <button class="chip" id="toggleAll" type="button">모두 펼치기</button>
+      </div>
+      <div id="accts" style="display:flex;flex-direction:column;gap:12px"></div>
+    </section>
+
+    <section id="pn-stock" class="tp" role="tabpanel" aria-labelledby="tb-stock" hidden>
+      <div class="rowhead">
+        <h2 style="margin:0">종목별 합산</h2>
+        <input id="q" class="search" type="search" placeholder="종목 검색" aria-label="종목 검색">
+      </div>
+      <div class="card"><div class="scroll" id="stocks"></div></div>
+      <p class="legend">여러 계좌에 나뉜 같은 종목은 합산합니다. 열 제목을 누르면 정렬이 바뀝니다.</p>
+    </section>
+
     <div class="live">
       <span>환율 USD/KRW <span class="num" id="fx"></span></span>
       <span class="legend">빨강 수익 · 파랑 손실 · 순손익은 제비용 반영 · 수익률은 현금 제외</span>
