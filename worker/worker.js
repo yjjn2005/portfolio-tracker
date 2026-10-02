@@ -28,6 +28,25 @@ async function quoteOne(sym) {
   };
 }
 
+// 국내 종목(네이버 증권 실시간 API) — 심볼 형식 'KR:005930'. 응답은 EUC-KR이라 바이트를 그대로 문자열로 만들어 파싱(이름은 쓰지 않음)
+async function quoteKR(codes) {
+  const out = {};
+  for (let i = 0; i < codes.length; i += 12) {
+    const part = codes.slice(i, i + 12);
+    try {
+      const r = await fetch('https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:' + part.join(','), { headers: UA, cf: { cacheTtl: 15, cacheEverything: true } });
+      if (!r.ok) continue;
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      let s = ''; for (let k = 0; k < bytes.length; k++) s += String.fromCharCode(bytes[k]);
+      const j = JSON.parse(s);
+      for (const x of (j?.result?.areas?.[0]?.datas || [])) {
+        out['KR:' + x.cd] = { price: x.nv, prev: x.pcv, currency: 'KRW', name: x.cd, state: x.ms, time: Date.now() };
+      }
+    } catch (e) {}
+  }
+  return out;
+}
+
 async function sha(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pf-salt:' + s));
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -39,10 +58,15 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === '/quote') {
-      const syms = (u.searchParams.get('symbols') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
+      const syms = (u.searchParams.get('symbols') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 90);
       if (!syms.length) return json({ error: 'symbols required' }, 400);
       const out = {};
-      await Promise.all(syms.map(async s => { try { const q = await quoteOne(s); if (q) out[s] = q; } catch (e) {} }));
+      const kr = syms.filter(s => s.startsWith('KR:')).map(s => s.slice(3));
+      const rest = syms.filter(s => !s.startsWith('KR:'));
+      await Promise.all([
+        quoteKR(kr).then(o => Object.assign(out, o)),
+        ...rest.map(async s => { try { const q = await quoteOne(s); if (q) out[s] = q; } catch (e) {} }),
+      ]);
       return json({ quotes: out, at: Date.now() }, 200, { 'Cache-Control': 'public, max-age=30' });
     }
 
