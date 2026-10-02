@@ -1,0 +1,81 @@
+// 포트폴리오 시세 서버 — 야후 파이낸스 차트 API 프록시 (키 불필요), 60초 캐시
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-PIN, X-NEW-PIN',
+};
+const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; portfolio-quote/1.0)' };
+
+const json = (obj, status = 200, extra = {}) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...extra },
+  });
+
+async function quoteOne(sym) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`;
+  const r = await fetch(url, { headers: UA, cf: { cacheTtl: 60, cacheEverything: true } });
+  if (!r.ok) return null;
+  const j = await r.json();
+  const m = j?.chart?.result?.[0]?.meta;
+  if (!m || m.regularMarketPrice == null) return null;
+  return {
+    price: m.regularMarketPrice,
+    prev: m.chartPreviousClose ?? m.previousClose ?? null,
+    currency: m.currency,
+    name: m.longName || m.shortName || sym,
+    time: m.regularMarketTime || null,
+  };
+}
+
+async function sha(s) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pf-salt:' + s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+export default {
+  async fetch(req, env) {
+    if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+    const u = new URL(req.url);
+
+    if (u.pathname === '/quote') {
+      const syms = (u.searchParams.get('symbols') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
+      if (!syms.length) return json({ error: 'symbols required' }, 400);
+      const out = {};
+      await Promise.all(syms.map(async s => { try { const q = await quoteOne(s); if (q) out[s] = q; } catch (e) {} }));
+      return json({ quotes: out, at: Date.now() }, 200, { 'Cache-Control': 'public, max-age=30' });
+    }
+
+    // 종목명 → 심볼 후보 (종목 코드 확인용)
+    if (u.pathname === '/search') {
+      const q = u.searchParams.get('q') || '';
+      if (!q) return json({ error: 'q required' }, 400);
+      const r = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0&lang=ko-KR&region=KR`, { headers: UA });
+      const j = r.ok ? await r.json() : { quotes: [] };
+      const list = (j.quotes || []).map(x => ({ symbol: x.symbol, name: x.longname || x.shortname, exch: x.exchDisp, type: x.quoteType }));
+      return json({ results: list });
+    }
+
+    // 보유 데이터(PIN 필요): GET 조회 / PUT 저장(저장 시 X-NEW-PIN 으로 PIN 변경)
+    if (u.pathname === '/data') {
+      const stored = await env.PF.get('pin');
+      const pin = req.headers.get('X-PIN') || '';
+      if (req.method === 'PUT') {
+        if (stored && (await sha(pin)) !== stored) return json({ error: 'bad pin' }, 401);
+        if (!stored && !pin) return json({ error: 'pin required' }, 400);
+        const body = await req.text();
+        if (body.length > 900000) return json({ error: 'too large' }, 413);
+        await env.PF.put('data', body);
+        const np = req.headers.get('X-NEW-PIN');
+        if (!stored || np) await env.PF.put('pin', await sha(np || pin));
+        return json({ ok: true });
+      }
+      if (!stored) return json({ error: 'not initialized' }, 404);
+      if ((await sha(pin)) !== stored) return json({ error: 'bad pin' }, 401);
+      const d = await env.PF.get('data');
+      return new Response(d || '{"rows":[],"syms":{}}', { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
+    }
+
+    return json({ ok: true, usage: ['/quote?symbols=005930.KS,AAPL,USDKRW=X', '/search?q=삼성전자'] });
+  },
+};

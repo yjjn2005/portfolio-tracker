@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>포트폴리오 수익률 관리</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f4e79'/%3E%3Cpath d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+
+/* Layout: 상단 탭(검토 / 화면 목업) · 목업은 요약 → 필터 → 계좌별 → 종목 순. 한국식 색: 상승 빨강, 하락 파랑 */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#667085; --line:#e3e6ec;
+  --accent:#1f4e79; --accent-soft:#e6eef7; --up:#d63b3b; --down:#2563c9; --warn:#b7791f; --warn-soft:#fbf1dc;
+  --font-body:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141c; --surface:#171e29; --fg:#e8ecf3; --muted:#9aa5b8; --line:#2a3342;
+  --accent:#7fb2e5; --accent-soft:#1d2b3d; --up:#ff6b6b; --down:#6ea2ff; --warn:#e3b04b; --warn-soft:#2e2815; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --surface:#171e29; --fg:#e8ecf3; --muted:#9aa5b8; --line:#2a3342;
+  --accent:#7fb2e5; --accent-soft:#1d2b3d; --up:#ff6b6b; --down:#6ea2ff; --warn:#e3b04b; --warn-soft:#2e2815; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:20px 56px}
+.wrap{max-width:980px;margin-inline:auto}
+h1{font-size:1.5rem;margin:0 0 4px;text-wrap:balance}
+h2{font-size:1.15rem;margin:0 0 10px;text-wrap:balance}
+h3{font-size:1rem;margin:0 0 6px}
+p{margin:0 0 10px;max-width:68ch}
+.sub{color:var(--muted);margin-bottom:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.8rem;white-space:nowrap}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.note{background:var(--warn-soft);border:1px solid var(--warn);border-radius:8px;padding:10px 12px;font-size:.9rem}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:.78rem;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+code{font-family:var(--font-num);font-size:.85em;background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+ul{margin:0;padding-left:1.1em} li{margin-bottom:5px}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.step{flex:1 1 150px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg);min-width:0}
+.step b{display:block;color:var(--accent)}
+/* mockup */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile .l{color:var(--muted);font-size:.8rem}
+.tile .v{font-family:var(--font-num);font-size:1.3rem;font-weight:600;font-variant-numeric:tabular-nums;word-break:keep-all}
+.tile.main{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.tile.main .l{color:inherit;opacity:.8}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips .lab{color:var(--muted);font-size:.8rem;margin-right:2px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:5px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.acct{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.acct-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;padding:12px 14px;background:var(--accent-soft)}
+.acct-h .t{font-weight:700}
+.acct-h .s{color:var(--muted);font-size:.82rem}
+.up{color:var(--up)} .down{color:var(--down)}
+.tick{color:var(--muted);font-family:var(--font-num);font-size:.78rem}
+.live{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:.85rem}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--bg);border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.legend{font-size:.82rem;color:var(--muted)}
+
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:34px}
+.fbar .lab{color:var(--muted);font-size:.85rem}
+.fchip{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:4px 12px;font:inherit;font-size:.85rem;cursor:pointer;font-weight:700}
+.dim h3{margin:0 0 8px}
+.dr{display:grid;grid-template-columns:7em 1fr;grid-template-areas:"n a" "b b" "p p";gap:2px 10px;width:100%;text-align:left;border:1px solid transparent;background:transparent;color:var(--fg);font:inherit;border-radius:8px;padding:8px;cursor:pointer;align-items:baseline}
+.dr+.dr{margin-top:2px}
+.dr:hover{background:var(--bg)}
+.dr[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.dr.empty{opacity:.55;cursor:default}
+.dr .n{grid-area:n;font-weight:700}
+.dr .n small{display:block;font-weight:400;color:var(--muted);font-size:.74rem;line-height:1.3}
+.dr .a{grid-area:a;text-align:right}
+.dr .b{grid-area:b;height:8px;background:var(--accent-soft);border-radius:4px;overflow:hidden;align-self:center}
+.dr .b i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.dr[aria-pressed="true"] .b{background:var(--surface)}
+.dr .p{grid-area:p;text-align:right;font-size:.84rem;white-space:normal;min-width:0}
+.dr .p .sh{color:var(--muted);margin-right:8px;font-family:var(--font-body)}
+.mv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.mv:last-child{border-bottom:0}
+.mv small{display:block;color:var(--muted);font-size:.74rem}
+.rowhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+details.acct{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+details.acct summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;padding:12px 14px;background:var(--accent-soft)}
+details.acct summary::-webkit-details-marker{display:none}
+details.acct summary .t::before{content:"▸ ";color:var(--accent)}
+details.acct[open] summary .t::before{content:"▾ "}
+.acct-h .t{font-weight:700}
+.tile .sm{color:var(--muted);font-size:.74rem}
+.tile.main .sm{color:inherit;opacity:.8}
+.mtx td.z{color:var(--muted)}
+.mtx th:first-child,.mtx td:first-child{white-space:nowrap}
+
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px}
+.top .live{margin:0}
+.btn:disabled{opacity:.55;cursor:default}
+.src{color:var(--muted);font-size:.72rem}
+h1{margin-bottom:2px}
+.gate{display:flex;justify-content:center;padding-top:12vh}
+.gate .card{width:100%;max-width:360px}
+.gate input{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:9em}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>포트폴리오 수익률 관리</h1>
+      <p class="sub" style="margin:0">개인·법인 · 증권사 · 계좌성격별 평가금액과 순손익</p>
+    </div>
+    <div class="live">
+      <span id="status">증권사 화면 기준</span>
+      <button class="btn" id="refresh" type="button">시세 갱신</button>
+      <button class="btn ghost" id="lock" type="button">잠금</button>
+    </div>
+  </div>
+  <section id="gate" class="gate"><form id="gform" class="card"><h2>포트폴리오 수익률 관리</h2><p class="sub">PIN을 입력하면 보유 현황을 불러옵니다.</p><div class="chips"><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN"><button class="btn" type="submit">열기</button></div><p id="gmsg" class="legend" role="status" style="margin:8px 0 0"></p></form></section>
+  <main hidden class="panel" style="display:flex;flex-direction:column;gap:18px;margin-top:14px">
+    <div class="tiles" id="tiles"></div>
+    <div class="fbar" id="fbar"></div>
+    <div class="grid3">
+      <div class="card dim" id="d-o"></div>
+      <div class="card dim" id="d-b"></div>
+      <div class="card dim" id="d-t"></div>
+    </div>
+    <div class="card">
+      <h3>증권사 × 계좌성격 평가금액</h3>
+      <div class="scroll" id="matrix"></div>
+    </div>
+    <div class="grid2">
+      <div class="card" id="gain"></div>
+      <div class="card" id="loss"></div>
+    </div>
+    <div class="rowhead">
+      <h2 style="margin:0">계좌별 보유 종목</h2>
+      <button class="chip" id="toggleAll" type="button">모두 펼치기</button>
+    </div>
+    <div id="accts" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div class="live">
+      <span>환율 USD/KRW <span class="num" id="fx"></span></span>
+      <span class="legend">빨강 수익 · 파랑 손실 · 순손익은 제비용 반영 · 수익률은 현금 제외</span>
+    </div>
+  </main>
+</div>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

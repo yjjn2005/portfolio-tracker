@@ -1,0 +1,7 @@
+name = "portfolio-api"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "PF"
+id = "6370e11004114f7cab6e8d0cbf2a4b16"
