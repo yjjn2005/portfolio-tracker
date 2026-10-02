@@ -1,8 +1,8 @@
 (function(){
 'use strict';
-const $=id=>document.getElementById(id),CFG=window.APP_CONFIG||{},TABS=['dash','acct','stock','allocation','risk','quality'];
+const $=id=>document.getElementById(id),CFG=window.APP_CONFIG||{},TABS=['dash','acct','stock','allocation','rebalance','dividend','tax','risk','journal','quality'];
 const labels={o:'구분',b:'증권사',t:'계좌성격',m:'자산'};
-let H=[],issues=[],asof='',demo=false,loaded=false,timer=null,generation=0,pendingLoad=null,pendingQuote=null,busy=false;
+let H=[],issues=[],asof='',rawData=null,symsMap={},currentPin='',demo=false,loaded=false,timer=null,generation=0,pendingLoad=null,pendingQuote=null,busy=false;
 let quoteState={at:null,updated:0,error:'',rates:{KRW:1}},sel={o:'',b:'',t:'',m:''},query='',sortKey='ev',sortDir=-1,detailKey=null,allOpen=false;
 const won=n=>Number.isFinite(n)?Math.round(n).toLocaleString('ko-KR'):'—';
 const number=n=>n===null||!Number.isFinite(n)?'—':n.toLocaleString('ko-KR',{maximumFractionDigits:6});
@@ -92,10 +92,12 @@ function render(){
  const conditions=Object.keys(sel).filter(k=>sel[k]).map(k=>labels[k]+' '+sel[k]);$('filter-summary').textContent=conditions.length?conditions.join(' · '):'전체 자산';
  const excluded=issues.filter(i=>i.excluded).length;$('data-warning').hidden=!issues.length;$('data-warning').textContent=excluded?'원본 '+excluded+'행은 금액·형식 오류로 합계에서 제외했습니다. 표시 금액은 확인 가능한 데이터의 합계입니다. 데이터 점검 탭에서 확인해 주세요.':'원본 데이터 '+issues.length+'건 확인 필요 · 데이터 점검 탭에서 비용·수량·계좌 정보를 확인해 주세요.';
  overview(rows,T,list);accounts(rows,T);stocks(rows,T,list);allocations(rows);risk(rows,T,list);dataQuality(rows,T);
+ if(window.PFX)PFX.render({rows,all:H,T,list,demo,syms:symsMap,rates:quoteState.rates,raw:rawData,asof});
 }
 function showTab(name,focus=false){if(!TABS.includes(name))name='dash';TABS.forEach(t=>{const on=t===name;$('tb-'+t).setAttribute('aria-selected',String(on));$('tb-'+t).tabIndex=on?0:-1;$('pn-'+t).hidden=!on;});try{localStorage.setItem('pf_tab',name);}catch(e){}if(focus)$('tb-'+name).focus();}
 function setStatus(t){$('status').textContent=t;}
 async function request(path,options={},controller){const timeout=setTimeout(()=>controller.abort(),18000);try{const response=await fetch(CFG.api.replace(/\/$/,'')+path,{...options,signal:controller.signal});if(!response.ok){const err=new Error(response.status===401?'PIN이 맞지 않습니다.':response.status===404?'보유 데이터가 아직 준비되지 않았습니다.':'서버 응답 오류 ('+response.status+')');err.status=response.status;throw err;}return await response.json();}finally{clearTimeout(timeout);}}
+const xapi=(path,options={})=>request(path,{...options,headers:{...(options.headers||{}),'X-PIN':currentPin},cache:'no-store'},new AbortController());
 async function refresh(){
  if(!loaded||demo||busy)return;
  if(!CFG.api){setStatus('시세 서버 미연결 · 현재 평가금액 유지');return;}
@@ -110,17 +112,17 @@ async function refresh(){
   const now=Date.now(),out=PF.applyQuotes(H,quotes,now);H=out.rows;quoteState={at:now,updated:out.updated.length,rates:out.rates,error:batchErrors?'일부 시세 요청에 실패했습니다. 미수신 보유분은 현재 평가금액을 유지합니다.':''};
   const total=H.filter(h=>!h.cash).length;
   setStatus(out.updated.length?'최근 요청 '+stamp(now)+' · 시세 반영 '+out.updated.length+'/'+total+'건'+(batchErrors?' · 일부 요청 실패':''):symbols.length?'시세 미수신 · 현재 평가금액 유지':'연결된 시세 없음 · 기준자료 유지');
-  render();
+  render();if(window.PFX)PFX.afterQuote({all:H,demo,updated:out.updated.length});
  }catch(err){if(token===generation){quoteState.at=Date.now();quoteState.updated=0;quoteState.error=err.name==='AbortError'?'시세 응답시간을 초과했습니다.':'시세 서버에 연결하지 못했습니다.';H=H.map(h=>({...h,attempt:h.cash?'현금 · 기준자료':'갱신 실패 · 현재 값 유지',priceDelta:null}));setStatus('시세 갱신 실패 · 현재 평가금액 유지');render();}}
  finally{if(token===generation){busy=false;pendingQuote=null;$('refresh').disabled=false;}}
 }
-function start(data,isDemo){const normalized=PF.normalize(data);H=normalized.rows;issues=normalized.issues;asof=normalized.asof;demo=isDemo;loaded=true;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};sel={o:'',b:'',t:'',m:''};query='';detailKey=null;allOpen=false;$('q').value='';$('toggleAll').textContent='모두 펼치기';$('gate').hidden=true;$('main').hidden=false;$('mode-label').hidden=!demo;$('demo-notice').hidden=!demo;$('lock').hidden=false;$('refresh').disabled=demo;$('refresh').title=demo?'예시는 가상 기준자료를 사용합니다.':'';initializeFilters();render();setStatus(demo?'예시 데이터 · 시세 자동 갱신 안 함':'증권사 기준자료 '+asof);if(!demo){refresh();timer=setInterval(()=>{if(!document.hidden)refresh();},60000);}}
+function start(data,isDemo){const normalized=PF.normalize(data);rawData=data;symsMap=normalized.syms||{};if(window.PFX)PFX.start({demo:isDemo,api:xapi});H=normalized.rows;issues=normalized.issues;asof=normalized.asof;demo=isDemo;loaded=true;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};sel={o:'',b:'',t:'',m:''};query='';detailKey=null;allOpen=false;$('q').value='';$('toggleAll').textContent='모두 펼치기';$('gate').hidden=true;$('main').hidden=false;$('mode-label').hidden=!demo;$('demo-notice').hidden=!demo;$('lock').hidden=false;$('refresh').disabled=demo;$('refresh').title=demo?'예시는 가상 기준자료를 사용합니다.':'';initializeFilters();render();setStatus(demo?'예시 데이터 · 시세 자동 갱신 안 함':'증권사 기준자료 '+asof);if(!demo){refresh();timer=setInterval(()=>{if(!document.hidden)refresh();},60000);}}
 function clearSensitiveView(){for(const id of ['tiles','dash-brief','dash-allocation','dash-risk','dash-quality','gain','loss','matrix','account-summary','accts','stocks','stock-detail','alloc-market','alloc-owner','alloc-broker','alloc-type','alloc-currency','risk-summary','concentration','contribution','scenario','quality-summary','fx-panel','issues-panel','quote-table'])html(id,'');for(const k of Object.keys(sel))html('filter-'+k,'<option value="">전체</option>');$('data-warning').textContent='';$('filter-summary').textContent='전체 자산';$('q').value='';}
-function lock(){generation++;pendingLoad?.abort();pendingQuote?.abort();pendingLoad=null;pendingQuote=null;clearInterval(timer);timer=null;busy=false;loaded=false;demo=false;H=[];issues=[];asof='';detailKey=null;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};try{localStorage.removeItem('pf_pin');sessionStorage.removeItem('pf_pin');}catch(e){}clearSensitiveView();$('main').hidden=true;$('gate').hidden=false;$('mode-label').hidden=true;$('lock').hidden=true;$('refresh').disabled=true;$('refresh').title='';$('pin').value='';$('gmsg').textContent='';$('unlock').disabled=false;$('demo').disabled=false;setStatus('보유 데이터 대기');$('pin').focus();}
+function lock(){generation++;currentPin='';if(window.PFX)PFX.clear();pendingLoad?.abort();pendingQuote?.abort();pendingLoad=null;pendingQuote=null;clearInterval(timer);timer=null;busy=false;loaded=false;demo=false;H=[];issues=[];asof='';detailKey=null;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};try{localStorage.removeItem('pf_pin');sessionStorage.removeItem('pf_pin');}catch(e){}clearSensitiveView();$('main').hidden=true;$('gate').hidden=false;$('mode-label').hidden=true;$('lock').hidden=true;$('refresh').disabled=true;$('refresh').title='';$('pin').value='';$('gmsg').textContent='';$('unlock').disabled=false;$('demo').disabled=false;setStatus('보유 데이터 대기');$('pin').focus();}
 async function load(pin){
  if(!CFG.api)throw new Error('보유 데이터 서버가 설정되지 않았습니다.');
  const token=++generation,controller=new AbortController();pendingLoad?.abort();pendingLoad=controller;$('unlock').disabled=true;$('demo').disabled=true;$('gmsg').textContent='보유 데이터를 확인하는 중…';
- try{const d=await request('/data',{headers:{'X-PIN':pin},cache:'no-store'},controller);if(token!==generation)return;start(d,false);try{sessionStorage.setItem('pf_pin',pin);}catch(e){}$('pin').value='';$('gmsg').textContent='';}
+ try{const d=await request('/data',{headers:{'X-PIN':pin},cache:'no-store'},controller);if(token!==generation)return;currentPin=pin;start(d,false);try{sessionStorage.setItem('pf_pin',pin);}catch(e){}$('pin').value='';$('gmsg').textContent='';}
  catch(err){if(token===generation){try{sessionStorage.removeItem('pf_pin');}catch(e){}$('gmsg').textContent=err.name==='AbortError'?'응답시간을 초과했습니다. 다시 시도해 주세요.':err.message;}}
  finally{if(token===generation){pendingLoad=null;$('unlock').disabled=false;$('demo').disabled=false;}}
 }

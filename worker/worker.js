@@ -47,6 +47,19 @@ async function quoteKR(codes) {
   return out;
 }
 
+// 배당 내역(야후 파이낸스): 최근 약 13개월, 종목통화 기준 1주당 금액
+async function dividendsOne(sym) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1mo&events=div`;
+  const r = await fetch(url, { headers: UA, cf: { cacheTtl: 21600, cacheEverything: true } });
+  if (!r.ok) return null;
+  const j = await r.json();
+  const res = j?.chart?.result?.[0];
+  if (!res) return null;
+  const cut = Date.now() / 1000 - 400 * 86400;
+  const items = Object.values(res.events?.dividends || {}).filter(x => x.date >= cut).sort((a, b) => a.date - b.date).map(x => ({ t: x.date, a: x.amount }));
+  return { currency: res.meta?.currency || '', items };
+}
+
 async function sha(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pf-salt:' + s));
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -78,6 +91,33 @@ export default {
       const j = r.ok ? await r.json() : { quotes: [] };
       const list = (j.quotes || []).map(x => ({ symbol: x.symbol, name: x.longname || x.shortname, exch: x.exchDisp, type: x.quoteType }));
       return json({ results: list });
+    }
+
+    if (u.pathname === '/div') {
+      const syms = (u.searchParams.get('symbols') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
+      if (!syms.length) return json({ error: 'symbols required' }, 400);
+      const out = {};
+      await Promise.all(syms.map(async s => { try { const q = await dividendsOne(s); if (q) out[s] = q; } catch (e) {} }));
+      return json({ divs: out, at: Date.now() }, 200, { 'Cache-Control': 'public, max-age=3600' });
+    }
+
+    // 목표비중·거래일지·자산추이: PIN 보호 저장소 /kv/targets|journal|hist
+    const kv = u.pathname.match(/^\/kv\/(targets|journal|hist)$/);
+    if (kv) {
+      const stored = await env.PF.get('pin');
+      const pin = req.headers.get('X-PIN') || '';
+      if (!stored) return json({ error: 'not initialized' }, 404);
+      if ((await sha(pin)) !== stored) return json({ error: 'bad pin' }, 401);
+      const key = 'kv:' + kv[1];
+      if (req.method === 'PUT') {
+        const body = await req.text();
+        if (body.length > 500000) return json({ error: 'too large' }, 413);
+        try { JSON.parse(body); } catch (e) { return json({ error: 'bad json' }, 400); }
+        await env.PF.put(key, body);
+        return json({ ok: true });
+      }
+      const v = await env.PF.get(key);
+      return new Response(v || 'null', { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
     }
 
     // 보유 데이터(PIN 필요): GET 조회 / PUT 저장(저장 시 X-NEW-PIN 으로 PIN 변경)
