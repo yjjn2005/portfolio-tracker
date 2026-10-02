@@ -40,7 +40,7 @@ async function quoteKR(codes) {
       let s = ''; for (let k = 0; k < bytes.length; k++) s += String.fromCharCode(bytes[k]);
       const j = JSON.parse(s);
       for (const x of (j?.result?.areas?.[0]?.datas || [])) {
-        out['KR:' + x.cd] = { price: x.nv, prev: x.pcv, currency: 'KRW', name: x.cd, state: x.ms, time: Date.now() };
+        out['KR:' + x.cd] = { price: x.nv, prev: x.pcv, currency: 'KRW', name: x.cd, state: x.ms, time: Math.floor(Date.now() / 1000) };
       }
     } catch (e) {}
   }
