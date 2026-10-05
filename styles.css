@@ -31,3 +31,7 @@ label.block textarea{width:100%;resize:vertical}
 .file-button{cursor:pointer;display:inline-flex;align-items:center}
 tfoot th,tfoot td{border-top:2px solid var(--line);font-weight:700}
 @media(max-width:560px){.field-row>label{flex:1 1 140px}.mini-input{width:70px}}
+
+.people{display:flex;gap:8px;overflow-x:auto;margin:0 0 12px;padding:2px 0}
+.person{font:inherit;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);min-height:40px;cursor:pointer;white-space:nowrap}
+.person[aria-pressed=true]{background:var(--accent);color:var(--surface);border-color:var(--accent);font-weight:700}
