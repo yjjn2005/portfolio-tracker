@@ -66,7 +66,7 @@ async function sha(s) {
 }
 
 // 가족별 데이터 분리: ?p=hy|th|he|jw (기본·유재진은 기존 키 유지)
-const personSuffix = u => { const p = u.searchParams.get('p') || ''; return /^(hy|th|he|jw)$/.test(p) ? ':' + p : ''; };
+const personSuffix = u => { const p = u.searchParams.get('p') || ''; return /^(hy|th|he|jw|yk)$/.test(p) ? ':' + p : ''; };
 
 export default {
   async fetch(req, env) {
@@ -132,6 +132,7 @@ export default {
         if (!stored && !pin) return json({ error: 'pin required' }, 400);
         const body = await req.text();
         if (body.length > 900000) return json({ error: 'too large' }, 413);
+        if (u.searchParams.get('p') === 'yk') return json({ error: 'Y&K 통합 탭은 읽기 전용입니다(유재진·김희연 탭에서 수정)' }, 400);
         await env.PF.put('data' + personSuffix(u), body);
         const np = req.headers.get('X-NEW-PIN');
         if (!stored || np) await env.PF.put('pin', await sha(np || pin));
@@ -139,6 +140,13 @@ export default {
       }
       if (!stored) return json({ error: 'not initialized' }, 404);
       if ((await sha(pin)) !== stored) return json({ error: 'bad pin' }, 401);
+      if (u.searchParams.get('p') === 'yk') {
+        // Y&K = 유재진 + 김희연 통합(읽기 전용)
+        const [a, b] = await Promise.all([env.PF.get('data'), env.PF.get('data:hy')]);
+        const A = JSON.parse(a || '{"rows":[],"syms":{}}'), B = JSON.parse(b || '{"rows":[],"syms":{}}');
+        const merged = { rows: [...(A.rows || []), ...(B.rows || [])], syms: { ...(A.syms || {}), ...(B.syms || {}) }, asof: [A.asof, B.asof].filter(Boolean).sort().pop() || '' };
+        return new Response(JSON.stringify(merged), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
+      }
       const d = await env.PF.get('data' + personSuffix(u));
       return new Response(d || '{"rows":[],"syms":{}}', { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
     }

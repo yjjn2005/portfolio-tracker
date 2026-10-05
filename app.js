@@ -1,9 +1,9 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id),CFG=window.APP_CONFIG||{},TABS=['dash','acct','stock','allocation','rebalance','dividend','tax','risk','journal','quality'];
-const labels={o:'구분',b:'증권사',t:'계좌성격',m:'자산'};
+const labels={on:'소유자',o:'구분',b:'증권사',t:'계좌성격',m:'자산'};
 let H=[],issues=[],asof='',rawData=null,symsMap={},currentPin='',demo=false,loaded=false,timer=null,generation=0,pendingLoad=null,pendingQuote=null,busy=false;
-let quoteState={at:null,updated:0,error:'',rates:{KRW:1}},sel={o:'',b:'',t:'',m:''},query='',sortKey='ev',sortDir=-1,detailKey=null,allOpen=false;
+let quoteState={at:null,updated:0,error:'',rates:{KRW:1}},sel={on:'',o:'',b:'',t:'',m:''},query='',sortKey='ev',sortDir=-1,detailKey=null,allOpen=false;
 const won=n=>Number.isFinite(n)?Math.round(n).toLocaleString('ko-KR'):'—';
 const number=n=>n===null||!Number.isFinite(n)?'—':n.toLocaleString('ko-KR',{maximumFractionDigits:6});
 const signed=n=>(n>0?'+':n<0?'−':'')+won(Math.abs(n));
@@ -98,7 +98,7 @@ function showTab(name,focus=false){if(!TABS.includes(name))name='dash';TABS.forE
 function setStatus(t){$('status').textContent=t;}
 async function request(path,options={},controller){const timeout=setTimeout(()=>controller.abort(),18000);try{const response=await fetch(CFG.api.replace(/\/$/,'')+path,{...options,signal:controller.signal});if(!response.ok){const err=new Error(response.status===401?'PIN이 맞지 않습니다.':response.status===404?'보유 데이터가 아직 준비되지 않았습니다.':'서버 응답 오류 ('+response.status+')');err.status=response.status;throw err;}return await response.json();}finally{clearTimeout(timeout);}}
 let person=(()=>{try{return sessionStorage.getItem('pf_person')||'jj';}catch(e){return 'jj';}})();
-const PEOPLE_NAMES={jj:'유재진',hy:'김희연',th:'유태현',he:'유해인',jw:'유지원'};
+const PEOPLE_NAMES={jj:'유재진',hy:'김희연',yk:'Y&K 통합',th:'유태현',he:'유해인',jw:'유지원'};
 function showPeople(on){const n=$('people');if(!n)return;n.hidden=!on;n.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===person)));if(on&&!H.length)$('data-warning').textContent=PEOPLE_NAMES[person]+' 탭에는 아직 입력된 보유 데이터가 없습니다. 증권 앱 스캔 자료를 보내 주시면 반영합니다.';}
 const xapi=(path,options={})=>request(path+(path.includes('?')?'&':'?')+'p='+person,{...options,headers:{...(options.headers||{}),'X-PIN':currentPin},cache:'no-store'},new AbortController());
 async function refresh(){
@@ -119,7 +119,7 @@ async function refresh(){
  }catch(err){if(token===generation){quoteState.at=Date.now();quoteState.updated=0;quoteState.error=err.name==='AbortError'?'시세 응답시간을 초과했습니다.':'시세 서버에 연결하지 못했습니다.';H=H.map(h=>({...h,attempt:h.cash?'현금 · 기준자료':'갱신 실패 · 현재 값 유지',priceDelta:null}));setStatus('시세 갱신 실패 · 현재 평가금액 유지');render();}}
  finally{if(token===generation){busy=false;pendingQuote=null;$('refresh').disabled=false;}}
 }
-function start(data,isDemo){clearInterval(timer);timer=null;const normalized=PF.normalize(data);rawData=data;symsMap=normalized.syms||{};if(window.PFX)PFX.start({demo:isDemo,api:xapi});H=normalized.rows;issues=normalized.issues;asof=normalized.asof;demo=isDemo;loaded=true;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};sel={o:'',b:'',t:'',m:''};query='';detailKey=null;allOpen=false;$('q').value='';$('toggleAll').textContent='모두 펼치기';$('gate').hidden=true;$('main').hidden=false;$('mode-label').hidden=!demo;$('demo-notice').hidden=!demo;$('lock').hidden=false;$('refresh').disabled=demo;$('refresh').title=demo?'예시는 가상 기준자료를 사용합니다.':'';initializeFilters();render();showPeople(!isDemo);setStatus(demo?'예시 데이터 · 시세 자동 갱신 안 함':'증권사 기준자료 '+asof);if(!demo){refresh();timer=setInterval(()=>{if(!document.hidden)refresh();},60000);}}
+function start(data,isDemo){clearInterval(timer);timer=null;const normalized=PF.normalize(data);rawData=data;symsMap=normalized.syms||{};if(window.PFX)PFX.start({demo:isDemo,api:xapi});H=normalized.rows;issues=normalized.issues;asof=normalized.asof;demo=isDemo;loaded=true;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};sel={on:'',o:'',b:'',t:'',m:''};query='';detailKey=null;allOpen=false;$('q').value='';$('toggleAll').textContent='모두 펼치기';$('gate').hidden=true;$('main').hidden=false;$('mode-label').hidden=!demo;$('demo-notice').hidden=!demo;$('lock').hidden=false;$('refresh').disabled=demo;$('refresh').title=demo?'예시는 가상 기준자료를 사용합니다.':'';initializeFilters();render();showPeople(!isDemo);setStatus(demo?'예시 데이터 · 시세 자동 갱신 안 함':'증권사 기준자료 '+asof);if(!demo){refresh();timer=setInterval(()=>{if(!document.hidden)refresh();},60000);}}
 function clearSensitiveView(){for(const id of ['tiles','dash-brief','dash-allocation','dash-risk','dash-quality','gain','loss','matrix','account-summary','accts','stocks','stock-detail','alloc-market','alloc-owner','alloc-broker','alloc-type','alloc-currency','risk-summary','concentration','contribution','scenario','quality-summary','fx-panel','issues-panel','quote-table'])html(id,'');for(const k of Object.keys(sel))html('filter-'+k,'<option value="">전체</option>');$('data-warning').textContent='';$('filter-summary').textContent='전체 자산';$('q').value='';}
 function lock(){generation++;currentPin='';if(window.PFX)PFX.clear();pendingLoad?.abort();pendingQuote?.abort();pendingLoad=null;pendingQuote=null;clearInterval(timer);timer=null;busy=false;loaded=false;demo=false;H=[];issues=[];asof='';detailKey=null;quoteState={at:null,updated:0,error:'',rates:{KRW:1}};try{localStorage.removeItem('pf_pin');sessionStorage.removeItem('pf_pin');}catch(e){}clearSensitiveView();showPeople(false);$('main').hidden=true;$('gate').hidden=false;$('mode-label').hidden=true;$('lock').hidden=true;$('refresh').disabled=true;$('refresh').title='';$('pin').value='';$('gmsg').textContent='';$('unlock').disabled=false;$('demo').disabled=false;setStatus('보유 데이터 대기');$('pin').focus();}
 async function load(pin){
