@@ -19,13 +19,14 @@ const tile=(label,value,note='',className='')=>'<div class="tile '+className+'">
 const money=n=>won(n)+'<span class="unit">원</span>';
 const signMoney=n=>'<span class="'+cls(n)+'">'+signed(n)+'<span class="unit">원</span></span>';
 const stockButton=s=>'<button class="stock-button" type="button" data-stock="'+esc(encodeURIComponent(s.key))+'">'+esc(s.n)+'</button>';
+function fixedNote(rows,T){const f=rows.filter(h=>h.fixed);if(!f.length||!(T.ev>0))return'';const ev=f.reduce((n,h)=>n+h.ev,0);return'<span class="warn-note" style="display:block;margin-top:6px;color:var(--warn,#b45309)">⚠ 종목 상세가 입력되지 않은 계좌 합산 '+f.length+'건이 총자산의 '+percent(ev/T.ev*100)+'를 차지하며 실시간 시세가 반영되지 않고 기준자료('+esc(asof)+') 금액으로 표시됩니다. 계좌별 보유종목·수량을 입력하면 실시간 반영됩니다.</span>';}
 function quality(rows){const invest=rows.filter(h=>!h.cash&&!h.bond&&!h.fixed),received=invest.filter(h=>h.attempt==='수신'),valued=invest.filter(h=>h.source==='quote');return{total:invest.length,received:received.length,valued:valued.length,pending:invest.length-received.length,unmapped:invest.filter(h=>!h.symbol).length,halt:invest.filter(h=>h.halt).length};}
 function initializeFilters(){Object.keys(sel).forEach(k=>{const options=[...new Set(H.map(h=>h[k]))].sort((a,b)=>a.localeCompare(b,'ko'));html('filter-'+k,'<option value="">전체</option>'+options.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join(''));$('filter-'+k).value=sel[k];});}
 function sourceText(h){if(h.cash)return'현금 · 기준자료';if(h.halt)return'거래정지 · 기준자료';if(h.bond)return'채권 · 증권사 평가금액';if(h.fixed)return'계좌 합산 · 증권사 평가금액';return h.source==='quote'?(h.symbol.startsWith('KR:')?'네이버 시세':'Yahoo 시세'):'증권사 기준자료';}
 function overview(rows,T,list){
  html('tiles',tile('총 평가금액',money(T.ev),'계좌 '+T.accounts+'개 · 합산 종목 '+T.n+'개','featured')+tile('투자 원금',money(T.inv),'현금 제외 · 매입금액')+tile('순평가손익',signMoney(T.pl),T.unknownFee?'제비용 미확인 '+T.unknownFee+'건':'입력 제비용 반영')+tile('평가수익률','<span class="'+cls(T.r)+'">'+pct(T.r)+'</span>','순평가손익 ÷ 투자 원금')+tile('현금성 자산',money(T.cash),'총자산 중 '+percent(T.ev?T.cash/T.ev*100:0)));
  const top=[...list].sort((a,b)=>b.ev-a.ev),top3=top.slice(0,3).reduce((n,s)=>n+s.ev,0),Q=quality(rows);
- html('dash-brief',rows.length?'<strong>'+T.accounts+'개 계좌 · '+T.n+'개 종목</strong><span>투자자산 '+percent(T.ev?T.invEv/T.ev*100:0)+' · 현금 '+percent(T.ev?T.cash/T.ev*100:0)+'</span><span>시세 반영 '+Q.received+'/'+Q.total+'건'+(demo?' · 예시 기준자료':' · 기준자료 '+esc(asof))+'</span>':empty('선택한 범위에 보유 데이터가 없습니다. 필터를 초기화해 주세요.'));
+ html('dash-brief',rows.length?'<strong>'+T.accounts+'개 계좌 · '+T.n+'개 종목</strong><span>투자자산 '+percent(T.ev?T.invEv/T.ev*100:0)+' · 현금 '+percent(T.ev?T.cash/T.ev*100:0)+'</span><span>시세 반영 '+Q.received+'/'+Q.total+'건'+(demo?' · 예시 기준자료':' · 기준자료 '+esc(asof))+'</span>'+fixedNote(rows,T):empty('선택한 범위에 보유 데이터가 없습니다. 필터를 초기화해 주세요.'));
  const allocations=PF.allocation(rows,'m'),colors=['var(--c1)','var(--c2)','var(--c3)','#a58953','#6276a1'];
  let offset=0;const stops=allocations.map((a,i)=>{const from=offset;offset+=a.w;return colors[i%colors.length]+' '+from+'% '+offset+'%';});
  html('dash-allocation',T.ev?'<div class="donut-layout"><div class="donut" role="img" aria-label="'+esc(allocations.map(a=>a.name+' '+percent(a.w)).join(', '))+'" style="background:conic-gradient('+stops.join(',')+')"><div class="donut-center"><strong>'+allocations.length+'</strong><span>자산 구분</span></div></div><div class="allocation-legend">'+allocations.map((a,i)=>'<div class="legend-row"><span class="label"><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(a.name)+'</span><b>'+percent(a.w)+'</b></div>').join('')+'</div></div><p class="caption" style="margin-top:17px">현금 포함 · 원화 평가금액 기준</p>':empty('평가금액이 없습니다.'));
@@ -95,7 +96,7 @@ function render(){
  if(window.PFX)PFX.render({rows,all:H,T,list,demo,syms:symsMap,rates:quoteState.rates,raw:rawData,asof});
 }
 function showTab(name,focus=false){if(!TABS.includes(name))name='dash';TABS.forEach(t=>{const on=t===name;$('tb-'+t).setAttribute('aria-selected',String(on));$('tb-'+t).tabIndex=on?0:-1;$('pn-'+t).hidden=!on;});try{localStorage.setItem('pf_tab',name);}catch(e){}if(focus)$('tb-'+name).focus();}
-function setStatus(t){$('status').textContent=t;}
+function setStatus(t){$('status').textContent=t+' · 앱 업데이트 2026-10-22';}
 async function request(path,options={},controller){const timeout=setTimeout(()=>controller.abort(),18000);try{const response=await fetch(CFG.api.replace(/\/$/,'')+path,{...options,signal:controller.signal});if(!response.ok){const err=new Error(response.status===401?'PIN이 맞지 않습니다.':response.status===404?'보유 데이터가 아직 준비되지 않았습니다.':'서버 응답 오류 ('+response.status+')');err.status=response.status;throw err;}return await response.json();}finally{clearTimeout(timeout);}}
 let person=(()=>{try{return sessionStorage.getItem('pf_person')||'jj';}catch(e){return 'jj';}})();
 const PEOPLE_NAMES={jj:'유재진',hy:'김희연',yk:'Y&K 통합',th:'유태현',he:'유해인',jw:'유지원'};
@@ -113,8 +114,8 @@ async function refresh(){
   for(let start=0;start<all.length;start+=50){try{const data=await request('/quote?symbols='+encodeURIComponent(all.slice(start,start+50).join(',')),{cache:'no-store'},controller);if(data&&data.quotes&&typeof data.quotes==='object')Object.assign(quotes,data.quotes);else batchErrors++;}catch(err){if(controller.signal.aborted)throw err;batchErrors++;}}
   if(token!==generation)return;
   const now=Date.now(),out=PF.applyQuotes(H,quotes,now);H=out.rows;quoteState={at:now,updated:out.updated.length,rates:out.rates,error:batchErrors?'일부 시세 요청에 실패했습니다. 미수신 보유분은 현재 평가금액을 유지합니다.':''};
-  const total=H.filter(h=>!h.cash).length;
-  setStatus(out.updated.length?'최근 요청 '+stamp(now)+' · 시세 반영 '+out.updated.length+'/'+total+'건'+(batchErrors?' · 일부 요청 실패':''):symbols.length?'시세 미수신 · 현재 평가금액 유지':'연결된 시세 없음 · 기준자료 유지');
+  const total=H.filter(h=>!h.cash&&!h.bond&&!h.fixed).length,fixedN=H.filter(h=>h.fixed).length;
+  setStatus(out.updated.length?'최근 요청 '+stamp(now)+' · 시세 반영 '+out.updated.length+'/'+total+'건'+(fixedN?' · 계좌 합산 '+fixedN+'건은 기준자료 유지':'')+(batchErrors?' · 일부 요청 실패':''):symbols.length?'시세 미수신 · 현재 평가금액 유지':'연결된 시세 없음 · 기준자료 유지');
   render();if(window.PFX)PFX.afterQuote({all:H,demo,updated:out.updated.length});
  }catch(err){if(token===generation){quoteState.at=Date.now();quoteState.updated=0;quoteState.error=err.name==='AbortError'?'시세 응답시간을 초과했습니다.':'시세 서버에 연결하지 못했습니다.';H=H.map(h=>({...h,attempt:h.cash?'현금 · 기준자료':'갱신 실패 · 현재 값 유지',priceDelta:null}));setStatus('시세 갱신 실패 · 현재 평가금액 유지');render();}}
  finally{if(token===generation){busy=false;pendingQuote=null;$('refresh').disabled=false;}}
