@@ -151,6 +151,8 @@ export default {
       return new Response(d || '{"rows":[],"syms":{}}', { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
     }
 
+    // 그 외 경로는 앱 화면(정적 파일)
+    if (env.ASSETS) return env.ASSETS.fetch(req);
     return json({ ok: true, usage: ['/quote?symbols=005930.KS,AAPL,USDKRW=X', '/search?q=삼성전자'] });
   },
 };
