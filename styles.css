@@ -35,3 +35,6 @@ tfoot th,tfoot td{border-top:2px solid var(--line);font-weight:700}
 .people{display:flex;gap:8px;overflow-x:auto;margin:0 0 12px;padding:2px 0}
 .person{font:inherit;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);min-height:40px;cursor:pointer;white-space:nowrap}
 .person[aria-pressed=true]{background:var(--accent);color:var(--surface);border-color:var(--accent);font-weight:700}
+
+.i-badge{width:28px;height:28px;border-radius:8px;display:inline-grid;place-items:center;font-weight:800;font-size:.95rem;letter-spacing:0;color:#163e67;background:var(--accent-soft);border:1px solid var(--line);cursor:default;user-select:none}
+.last-update{white-space:nowrap;font-size:.8125rem}
