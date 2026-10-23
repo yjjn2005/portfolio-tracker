@@ -65,8 +65,8 @@ async function sha(s) {
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-// 가족별 데이터 분리: ?p=hy|th|he|jw (기본·유재진은 기존 키 유지)
-const personSuffix = u => { const p = u.searchParams.get('p') || ''; return /^(hy|th|he|jw|yk)$/.test(p) ? ':' + p : ''; };
+// 가족별 데이터 분리: ?p=hy|th|he|jw|nj (기본·유재진은 기존 키 유지)
+const personSuffix = u => { const p = u.searchParams.get('p') || ''; return /^(hy|th|he|jw|nj|yk)$/.test(p) ? ':' + p : ''; };
 
 export default {
   async fetch(req, env) {

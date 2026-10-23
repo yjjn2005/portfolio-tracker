@@ -99,7 +99,7 @@ function showTab(name,focus=false){if(!TABS.includes(name))name='dash';TABS.forE
 function setStatus(t){$('status').textContent=t+' · 앱 업데이트 2026-10-22';}
 async function request(path,options={},controller){const timeout=setTimeout(()=>controller.abort(),18000);try{const response=await fetch(CFG.api.replace(/\/$/,'')+path,{...options,signal:controller.signal});if(!response.ok){const err=new Error(response.status===401?'PIN이 맞지 않습니다.':response.status===404?'보유 데이터가 아직 준비되지 않았습니다.':'서버 응답 오류 ('+response.status+')');err.status=response.status;throw err;}return await response.json();}finally{clearTimeout(timeout);}}
 let person=(()=>{try{return sessionStorage.getItem('pf_person')||'jj';}catch(e){return 'jj';}})();
-const PEOPLE_NAMES={jj:'유재진',hy:'김희연',yk:'Y&K 통합',th:'유태현',he:'유해인',jw:'유지원'};
+const PEOPLE_NAMES={jj:'유재진',hy:'김희연',yk:'Y&K 통합',th:'유태현',he:'유해인',jw:'유지원',nj:'남유준'};
 function showPeople(on){const n=$('people');if(!n)return;n.hidden=!on;n.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===person)));if(on&&!H.length)$('data-warning').textContent=PEOPLE_NAMES[person]+' 탭에는 아직 입력된 보유 데이터가 없습니다. 증권 앱 스캔 자료를 보내 주시면 반영합니다.';}
 const xapi=(path,options={})=>request(path+(path.includes('?')?'&':'?')+'p='+person,{...options,headers:{...(options.headers||{}),'X-PIN':currentPin},cache:'no-store'},new AbortController());
 async function refresh(){
